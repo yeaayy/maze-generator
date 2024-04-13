@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Generator</title>
+    <style>
+        body {
+            margin: 0px;
+            display: flex;
+            flex-direction: column;
+        }
+        #canvas {
+            align-self: center;
+            margin: 0.5rem;
+        }
+        input:not([type=checkbox]) {
+            width: 5rem;
+        }
+        @media (min-width: 768px) {
+            body {
+                flex-direction: row;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <form action="" onsubmit="regenerate(); return false">
+            <input type="number" placeholder="width" id="width" value="20">
+            x
+            <input type="number" placeholder="height" id="height" value="20">
+            <input type="submit" value="generate">
+            <br>
+            <input type="checkbox" id="showpath"> Show walkthrough path
+        </form>
+    </div>
+    <div id="canvas">
+        <canvas>
+            Your browser does not support canvas.
+        </canvas>
+    </div>
+    <script>
+const cnv = document.getElementsByTagName("canvas")[0];
+const showpath = document.getElementById('showpath');
+const ctx = cnv.getContext("2d");
+
+let gridWidth = 20;
+let gridHeight = 20;
+let cellSize, data;
+
+function Point(x, y, prev = null) {
+    const result = {};
+    result.x = x;
+    result.y = y;
+    result.prev = prev;
+    Object.preventExtensions(result);
+    return result;
+}
+
+function getIndex(x, y) {
+    if(x < 0 || x >= gridWidth) return -1;
+    if(y < 0 || y >= gridHeight) return -1;
+    return y * gridWidth + x;
+}
+
+function getPrev(x, y) {
+    if(x < 0 || x >= gridWidth) return undefined;
+    if(y < 0 || y >= gridHeight) return undefined;
+    return data[y * gridWidth + x];
+}
+
+function isConnected(ax, ay, bx, by) {
+    if(ax === 0 &&
+        ay === 0 &&
+        bx === 0 &&
+        by === -1) {
+        // Enter gate
+        return true;
+    }
+    if(ax === (gridWidth - 1) &&
+        ay === gridHeight &&
+        bx === (gridWidth - 1) &&
+        by === (gridHeight - 1)) {
+        // Exit gate
+        return true;
+    }
+    const ai = getIndex(ax, ay);
+    const bi = getIndex(bx, by);
+    const ap = getPrev(ax, ay);
+    const bp = getPrev(bx, by);
+    const result = ai === bp || bi === ap;
+    return result;
+}
+
+function resizeDimension() {
+    const minDimension = (window.innerWidth < window.innerHeight ? window.innerWidth : innerHeight) - 20;
+    cnv.width = minDimension + 2;
+    cnv.height = minDimension + 2;
+    gridWidth = parseInt(document.getElementById("width").value)
+    gridHeight = parseInt(document.getElementById("height").value)
+    if(gridWidth > gridHeight) {
+        cellSize = minDimension / gridWidth;
+    } else {
+        cellSize = minDimension / gridHeight;
+    }
+}
+
+function regenerate() {
+    resizeDimension();
+    data = new Array(gridHeight * gridWidth);
+    data[0] = 0;
+
+    let bstack = Point(0, 0);
+    while(bstack !== null) {
+        const avail = [];
+        function add(dx, dy) {
+            const x = bstack.x + dx, y = bstack.y + dy;
+            if(getIndex(x, y) !== -1) {
+                if(getPrev(x, y) === undefined) {
+                    avail.push(new Point(x, y, bstack));
+                }
+            }
+        }
+        add(-1, 0)
+        add(0, -1)
+        add(1, 0)
+        add(0, 1)
+        if(avail.length === 0) {
+            bstack = bstack.prev;
+        } else {
+            const sel = avail[Math.floor(Math.random() * avail.length)];
+            data[getIndex(sel.x, sel.y)] = getIndex(bstack.x, bstack.y);
+            bstack = sel;
+        }
+    }
+    repaint();
+}
+
+function repaint() {
+    ctx.clearRect(0, 0, cnv.width, cnv.height);
+
+    ctx.strokeStyle = "black";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const line = (sx, sy, ex, ey) => {
+        ctx.moveTo(sx * cellSize + 1, sy * cellSize + 1);
+        ctx.lineTo(ex * cellSize + 1, ey * cellSize + 1);
+    };
+    for(let y = 0; y <= gridHeight; y++) {
+        for(let x = 0; x <= gridWidth; x++) {
+            if(!isConnected(x, y, x, y - 1) && x < gridWidth) {
+                line(x, y, x + 1, y);
+            }
+            if(!isConnected(x, y, x - 1, y) && y < gridHeight) {
+                line(x, y, x, y + 1);
+            }
+        }
+    }
+    ctx.stroke();
+
+    if(!showpath.checked) return;
+    ctx.strokeStyle = 'red';
+    let point = data.length - 1;
+    const remapPoint = (i) => [(i % gridHeight + 0.5) * cellSize, (Math.floor(i / gridHeight) + 0.5) * cellSize];
+    ctx.beginPath()
+    ctx.moveTo(...remapPoint(point));
+    while(point) {
+        ctx.lineTo(...remapPoint(point));
+        point = data[point];
+    }
+    ctx.lineTo(...remapPoint(point));
+    ctx.stroke();
+}
+
+regenerate();
+
+window.addEventListener('resize', () => {
+    resizeDimension();
+    repaint();
+});
+showpath.addEventListener('change', () => {
+    repaint();
+});
+    </script>
+</body>
+</html>
